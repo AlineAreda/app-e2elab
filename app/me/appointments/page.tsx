@@ -32,13 +32,14 @@ export default function AppointmentsPage() {
   useEffect(() => {
     if (loading) return
     
-    const currentUser = user
-    if (currentUser) {
-      fetchAppointments(currentUser.id) 
-    } else {
+    if (!user) {
       setAppointments([])
       setAppointmentsLoading(false)
+      return
     }
+    
+    // TypeScript agora reconhece que user não é null aqui
+    fetchAppointments(user.id)
   }, [user, loading])
 
   const fetchAppointments = async (userId: string) => {
