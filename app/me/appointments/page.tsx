@@ -36,7 +36,8 @@ export default function AppointmentsPage() {
   }, [user, loading])
 
   const fetchAppointments = async () => {
-    if (!user) return
+    const currentUser = user
+    if (!currentUser) return
     
     try {
       const { data, error } = await supabase
@@ -57,7 +58,7 @@ export default function AppointmentsPage() {
             address
           )
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .order('scheduled_date', { ascending: true })
 
       if (error) throw error
@@ -85,7 +86,8 @@ export default function AppointmentsPage() {
   }
 
   const handleCancel = async (appointmentId: string) => {
-    if (!user) return
+    const currentUser = user
+    if (!currentUser) return
     
     const appointment = appointments.find(apt => apt.id === appointmentId)
     
@@ -101,7 +103,7 @@ export default function AppointmentsPage() {
         .from('appointments')
         .update({ status: 'cancelled' })
         .eq('id', appointmentId)
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
 
       if (error) throw error
 
