@@ -5,7 +5,7 @@ import { useAuth } from '@/components/AuthProvider'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale/pt-BR'
+import { ptBR } from 'date-fns/locale'
 import { supabase } from '@/lib/supabase'
 import { translateError } from '@/lib/error-messages'
 import { toast } from 'sonner'
@@ -16,7 +16,7 @@ interface Appointment {
   exam_name: string
   scheduled_date: string
   scheduled_time: string
-  status: 'scheduled' | 'completed' | 'cancelled'
+  status: 'scheduled' | 'completed' | 'cancelled' // ajuste para 'canceled' se o DB usar 1 L
   price: number
   exam_id: string
   unit_name?: string
@@ -31,14 +31,14 @@ export default function AppointmentsPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      fetchAppointments()
+      fetchAppointments(user.id) // passa o id -> TS sabe que não é null
+    } else if (!loading && !user) {
+      setAppointments([])
+      setAppointmentsLoading(false)
     }
   }, [user, loading])
 
-  const fetchAppointments = async () => {
-    const currentUser = user
-    if (!currentUser) return
-    
+  const fetchAppointments = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('appointments')
@@ -58,19 +58,18 @@ export default function AppointmentsPage() {
             address
           )
         `)
-        .eq('user_id', currentUser.id)
+        .eq('user_id', userId)
         .order('scheduled_date', { ascending: true })
 
       if (error) throw error
 
-      // Transformar dados para o formato esperado
       const formattedAppointments: Appointment[] = (data || []).map((apt: any) => ({
         id: apt.id,
-        exam_name: apt.exams?.name || 'Exame não encontrado',
+        exam_name: apt.exams?.name ?? 'Exame não encontrado',
         scheduled_date: apt.scheduled_date,
         scheduled_time: apt.scheduled_time,
         status: apt.status,
-        price: apt.exams?.price || 0,
+        price: Number(apt.exams?.price ?? 0),
         exam_id: apt.exam_id,
         unit_name: apt.units?.name,
         unit_city: apt.units?.city,
@@ -88,12 +87,10 @@ export default function AppointmentsPage() {
   const handleCancel = async (appointmentId: string) => {
     const currentUser = user
     if (!currentUser) return
-    
+
     const appointment = appointments.find(apt => apt.id === appointmentId)
-    
     if (!appointment) return
 
-    // Usar confirm do browser para confirmação, depois mostrar toast
     if (!window.confirm(`Tem certeza que deseja cancelar o agendamento de ${appointment.exam_name}?`)) {
       return
     }
@@ -101,7 +98,7 @@ export default function AppointmentsPage() {
     try {
       const { error } = await supabase
         .from('appointments')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled' }) // troque para 'canceled' se o DB usar 1 L
         .eq('id', appointmentId)
         .eq('user_id', currentUser.id)
 
@@ -112,7 +109,7 @@ export default function AppointmentsPage() {
           apt.id === appointmentId ? { ...apt, status: 'cancelled' as const } : apt
         )
       )
-      
+
       toast.success('Agendamento cancelado com sucesso', {
         description: `O agendamento de ${appointment.exam_name} foi cancelado.`,
         duration: 5000,
@@ -185,7 +182,11 @@ export default function AppointmentsPage() {
                   <div>
                     <CardTitle>{appointment.exam_name}</CardTitle>
                     <CardDescription>
-                      {format(new Date(appointment.scheduled_date), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                      {format(
+                        new Date(appointment.scheduled_date),
+                        "EEEE, dd 'de' MMMM 'de' yyyy",
+                        { locale: ptBR }
+                      )}
                       {' às '}
                       {appointment.scheduled_time}
                     </CardDescription>
@@ -231,4 +232,3 @@ export default function AppointmentsPage() {
     </div>
   )
 }
-
