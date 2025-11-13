@@ -9,7 +9,8 @@ import { ptBR } from 'date-fns/locale'
 import { supabase } from '@/lib/supabase'
 import { translateError } from '@/lib/error-messages'
 import { toast } from 'sonner'
-import { MapPin } from 'lucide-react'
+import { MapPin, Calendar } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface Appointment {
   id: string
@@ -19,6 +20,7 @@ interface Appointment {
   status: 'scheduled' | 'completed' | 'cancelled' 
   price: number
   exam_id: string
+  unit_id?: string
   unit_name?: string
   unit_city?: string
   unit_address?: string
@@ -26,6 +28,7 @@ interface Appointment {
 
 export default function AppointmentsPage() {
   const { user, loading } = useAuth()
+  const router = useRouter()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
 
@@ -52,6 +55,7 @@ export default function AppointmentsPage() {
           scheduled_time,
           status,
           exam_id,
+          unit_id,
           exams (
             name,
             price
@@ -75,6 +79,7 @@ export default function AppointmentsPage() {
         status: apt.status,
         price: Number(apt.exams?.price ?? 0),
         exam_id: apt.exam_id,
+        unit_id: apt.unit_id,
         unit_name: apt.units?.name,
         unit_city: apt.units?.city,
         unit_address: apt.units?.address
@@ -220,12 +225,21 @@ export default function AppointmentsPage() {
                     <p className="text-lg font-bold">R$ {appointment.price.toFixed(2)}</p>
                   </div>
                   {appointment.status === 'scheduled' && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleCancel(appointment.id)}
-                    >
-                      Cancelar
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push(`/me/appointments/reschedule/${appointment.id}`)}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Reagendar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleCancel(appointment.id)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>

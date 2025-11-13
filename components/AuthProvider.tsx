@@ -26,17 +26,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Páginas públicas que não requerem autenticação
-    const publicPages = ['/login', '/signup', '/']
+    const publicPages = ['/login', '/signup', '/', '/privacy', '/terms']
+    
+    let mounted = true
+    let initialLoad = true
     
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
+      
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+      initialLoad = false
 
       // Redirect to login if not authenticated and not on public page
       if (!session && !publicPages.includes(pathname)) {
-        router.push('/login')
+        setTimeout(() => {
+          if (mounted) router.push('/login')
+        }, 100)
       }
     })
 
@@ -44,19 +52,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      
+      // Skip redirect on initial load
+      if (initialLoad) {
+        initialLoad = false
+        setSession(session)
+        setUser(session?.user ?? null)
+        setLoading(false)
+        return
+      }
+      
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
 
       // Redirect to login if not authenticated and not on public page
       if (!session && !publicPages.includes(pathname)) {
-        router.push('/login')
+        setTimeout(() => {
+          if (mounted) router.push('/login')
+        }, 100)
       } else if (session && (pathname === '/login' || pathname === '/signup')) {
-        router.push('/exams')
+        setTimeout(() => {
+          if (mounted) router.push('/exams')
+        }, 100)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [router, pathname])
 
   return (

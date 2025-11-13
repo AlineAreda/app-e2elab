@@ -4,7 +4,11 @@ import "./globals.css"
 import { AuthProvider } from "@/components/AuthProvider"
 import { Header } from "@/components/Header"
 import { Footer } from "@/components/Footer"
-import { Toaster } from "@/components/ui/sonner"
+import dynamic from "next/dynamic"
+
+const Toaster = dynamic(() => import("@/components/ui/sonner").then(mod => ({ default: mod.Toaster })), {
+  ssr: false
+})
 
 const inter = Inter({ subsets: ["latin"] })
 
