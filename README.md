@@ -132,6 +132,74 @@ Rota para deletar usuário pelo e-mail (usada pelo time de testes via Postman).
 
 **Nota:** Para deletar usuários, é recomendado configurar a variável de ambiente `SUPABASE_SERVICE_ROLE_KEY` no arquivo `.env.local`. Caso contrário, a rota usará a chave anônima (pode ter limitações).
 
+## 🚀 Deploy
+
+### Deploy na Vercel (Frontend)
+
+A Vercel oferece hospedagem gratuita para projetos Next.js. Siga os passos:
+
+1. **Crie uma conta na Vercel** (se ainda não tiver):
+   - Acesse [https://vercel.com](https://vercel.com)
+   - Faça login com sua conta GitHub
+
+2. **Importe o projeto**:
+   - Clique em "Add New Project"
+   - Selecione o repositório `AlineAreda/app-e2elab`
+   - A Vercel detectará automaticamente que é um projeto Next.js
+
+3. **Configure as variáveis de ambiente**:
+   Na seção "Environment Variables", adicione:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anonima_do_supabase
+   SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_do_supabase
+   ```
+
+4. **Deploy**:
+   - Clique em "Deploy"
+   - Aguarde o build completar (geralmente 2-3 minutos)
+   - Sua aplicação estará disponível em uma URL como: `https://app-e2elab.vercel.app`
+
+5. **Configurações adicionais** (opcional):
+   - Domínio customizado: Vercel permite adicionar seu próprio domínio
+   - Deploy automático: Cada push na branch `main` fará deploy automático
+
+### Supabase (Backend)
+
+O Supabase já está configurado como backend. Para garantir que está funcionando:
+
+1. **Acesse o Dashboard do Supabase**:
+   - Vá para [https://supabase.com](https://supabase.com)
+   - Faça login no seu projeto
+
+2. **Verifique as configurações**:
+   - **URL do Projeto**: Encontre em Settings > API > Project URL
+   - **Anon Key**: Encontre em Settings > API > Project API keys > `anon` `public`
+   - **Service Role Key**: Encontre em Settings > API > Project API keys > `service_role` `secret`
+
+3. **Configure as variáveis de ambiente na Vercel**:
+   Use as credenciais do seu projeto Supabase nas variáveis de ambiente da Vercel
+
+4. **Banco de Dados**:
+   - Certifique-se de que todas as tabelas estão criadas (`profiles`, `exams`, `appointments`, `units`)
+   - Verifique as políticas RLS (Row Level Security)
+   - Confirme que as funções RPC estão criadas (ex: `get_user_email_by_cpf`)
+
+### Variáveis de Ambiente Necessárias
+
+Crie um arquivo `.env.local` localmente ou configure na Vercel:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anonima_aqui
+SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_aqui
+```
+
+**Importante**: 
+- `NEXT_PUBLIC_*` são variáveis públicas e podem ser acessadas no cliente
+- `SUPABASE_SERVICE_ROLE_KEY` é privada e só deve ser usada em rotas de API server-side
+- Nunca commite arquivos `.env` ou `.env.local` no Git
+
 ## 📝 Próximos Passos
 
 Para produção, você precisará:
