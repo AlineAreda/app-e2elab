@@ -36,6 +36,8 @@ export default function AppointmentsPage() {
   }, [user, loading])
 
   const fetchAppointments = async () => {
+    if (!user) return
+    
     try {
       const { data, error } = await supabase
         .from('appointments')
@@ -83,6 +85,8 @@ export default function AppointmentsPage() {
   }
 
   const handleCancel = async (appointmentId: string) => {
+    if (!user) return
+    
     const appointment = appointments.find(apt => apt.id === appointmentId)
     
     if (!appointment) return
