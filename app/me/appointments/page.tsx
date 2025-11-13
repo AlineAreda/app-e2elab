@@ -16,7 +16,7 @@ interface Appointment {
   exam_name: string
   scheduled_date: string
   scheduled_time: string
-  status: 'scheduled' | 'completed' | 'cancelled' // ajuste para 'canceled' se o DB usar 1 L
+  status: 'scheduled' | 'completed' | 'cancelled' 
   price: number
   exam_id: string
   unit_name?: string
@@ -30,9 +30,12 @@ export default function AppointmentsPage() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
 
   useEffect(() => {
-    if (!loading && user) {
-      fetchAppointments(user.id) // passa o id -> TS sabe que não é null
-    } else if (!loading && !user) {
+    if (loading) return
+    
+    const currentUser = user
+    if (currentUser) {
+      fetchAppointments(currentUser.id) 
+    } else {
       setAppointments([])
       setAppointmentsLoading(false)
     }
