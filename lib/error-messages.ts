@@ -4,7 +4,38 @@
 export function translateError(error: any): string {
   if (!error) return 'Ocorreu um erro desconhecido'
 
-  const errorMessage = error.message || error.toString()
+  // Extrair mensagem e código do erro (pode vir em diferentes formatos)
+  let errorMessage = error.message || error.toString() || ''
+  let errorCode = error.code || error.status || ''
+  
+  // Se o erro for um objeto com propriedades code e message (resposta JSON do Supabase)
+  if (typeof error === 'object' && error.code && error.message) {
+    errorCode = error.code
+    errorMessage = error.message
+  }
+  
+  // Se o erro for uma string JSON, tentar fazer parse
+  if (typeof errorMessage === 'string' && errorMessage.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(errorMessage)
+      if (parsed.code) errorCode = parsed.code
+      if (parsed.message) errorMessage = parsed.message
+    } catch {
+      // Não é JSON válido, continuar com a string original
+    }
+  }
+  
+  // Verificar código de erro do Supabase primeiro
+  if (errorCode === 'over_email_send_rate_limit' || errorCode === 429 || 
+      String(errorCode).includes('over_email_send_rate_limit')) {
+    // Tentar extrair o tempo de espera da mensagem
+    const timeMatch = errorMessage.match(/(\d+)\s*(second|seconds|segundo|segundos)/i)
+    if (timeMatch) {
+      const time = timeMatch[1]
+      return `Por segurança, você só pode solicitar o cadastro novamente após ${time} segundos. Aguarde e tente novamente.`
+    }
+    return 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.'
+  }
 
   // Mensagens de erro do Supabase Auth
   const errorTranslations: Record<string, string> = {
@@ -14,6 +45,8 @@ export function translateError(error: any): string {
     'User already registered': 'Este e-mail já está cadastrado. Faça login ou recupere sua senha.',
     'already registered': 'Este e-mail já está cadastrado. Faça login ou recupere sua senha.',
     'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+    'over_email_send_rate_limit': 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.',
+    'For security purposes, you can only request this after': 'Por segurança, você só pode solicitar isso após',
     'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
     'Signup is disabled': 'Cadastro temporariamente desabilitado. Entre em contato com o suporte.',
     'User not found': 'Usuário não encontrado. Verifique suas credenciais.',
@@ -40,6 +73,22 @@ export function translateError(error: any): string {
     }
   }
 
+  // Verificar erro de rate limit de e-mail na mensagem e extrair tempo de espera
+  if (errorMessage.includes('over_email_send_rate_limit') || 
+      errorMessage.includes('For security purposes, you can only request this after') ||
+      errorMessage.toLowerCase().includes('rate limit') ||
+      errorMessage.toLowerCase().includes('too many requests')) {
+    // Tentar extrair o tempo de espera da mensagem (pode estar em diferentes formatos)
+    const timeMatch = errorMessage.match(/(\d+)\s*(second|seconds|segundo|segundos|s)/i) ||
+                     errorMessage.match(/after\s+(\d+)/i) ||
+                     errorMessage.match(/(\d+)\s*segundos?/i)
+    if (timeMatch) {
+      const time = timeMatch[1]
+      return `Por segurança, você só pode solicitar o cadastro novamente após ${time} segundos. Aguarde e tente novamente.`
+    }
+    return 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.'
+  }
+
   // Traduções parciais (contém)
   if (errorMessage.toLowerCase().includes('invalid login')) {
     return 'Credenciais inválidas. Verifique seu CPF/e-mail e senha.'
@@ -51,6 +100,9 @@ export function translateError(error: any): string {
     }
     if (errorMessage.toLowerCase().includes('invalid')) {
       return 'E-mail inválido. Verifique o formato do e-mail.'
+    }
+    if (errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('rate_limit')) {
+      return 'Muitas tentativas de cadastro. Aguarde alguns segundos e tente novamente.'
     }
   }
 

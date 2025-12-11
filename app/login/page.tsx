@@ -18,6 +18,8 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/exams'
+  const signupSuccess = searchParams.get('signup') === 'success'
+  const prefillIdentifier = searchParams.get('identifier') || ''
 
   // Verificar se o identificador é CPF ou email
   const isCPF = (value: string) => {
@@ -29,6 +31,12 @@ function LoginForm() {
   const normalizeCPF = (cpf: string) => {
     return cpf.replace(/\D/g, '')
   }
+
+  useEffect(() => {
+    if (prefillIdentifier) {
+      setIdentifier(prefillIdentifier)
+    }
+  }, [prefillIdentifier])
 
   const checkUserExists = async (identifier: string) => {
     try {
@@ -45,7 +53,7 @@ function LoginForm() {
         return emailData
       } else {
         // Se for email, verificar se existe tentando fazer login
-        // Nota: Esta é uma verificação básica, pode não ser 100% precisa
+        
         return identifier
       }
     } catch (error) {
@@ -148,6 +156,11 @@ function LoginForm() {
                 required
               />
             </div>
+            {signupSuccess && (
+              <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
+                Conta criada com sucesso! Faça login para continuar.
+              </div>
+            )}
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -195,3 +208,4 @@ export default function LoginPage() {
     </Suspense>
   )
 }
+
