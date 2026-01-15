@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { translateError } from '@/lib/error-messages'
+import { Eye, EyeOff } from 'lucide-react'
 
 function SignUpForm() {
   const [formData, setFormData] = useState({
@@ -23,6 +24,8 @@ function SignUpForm() {
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [touched, setTouched] = useState<Record<string, boolean>>({})
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const isSubmittingRef = useRef(false) // Proteção contra múltiplas submissões
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -61,12 +64,52 @@ function SignUpForm() {
     return phone
   }
 
+  const formatDate = (date: string) => {
+    // Remove tudo que não é número
+    const numbers = date.replace(/\D/g, '')
+    
+    // Limita a 8 dígitos (ddMMyyyy)
+    const limitedNumbers = numbers.slice(0, 8)
+    
+    // Aplica a máscara dd/MM/yyyy
+    if (limitedNumbers.length <= 2) {
+      return limitedNumbers
+    } else if (limitedNumbers.length <= 4) {
+      return `${limitedNumbers.slice(0, 2)}/${limitedNumbers.slice(2)}`
+    } else {
+      return `${limitedNumbers.slice(0, 2)}/${limitedNumbers.slice(2, 4)}/${limitedNumbers.slice(4)}`
+    }
+  }
+
+  const convertDateToISO = (date: string): string => {
+    // Converte dd/MM/yyyy para yyyy-MM-dd
+    const parts = date.split('/')
+    if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`
+    }
+    return date
+  }
+
   const validateCPF = (cpf: string) => {
     const numbers = normalizeCPF(cpf)
     if (numbers.length !== 11) return false
     
-    // Validação básica de CPF
+    // Não aceitar CPFs óbvios inválidos (ex.: 000.000.000-00, 111.111.111-11, etc)
     if (/^(\d)\1{10}$/.test(numbers)) return false
+    
+    // Rejeitar CPFs com todos os dígitos iguais
+    if (numbers === '00000000000' || 
+        numbers === '11111111111' || 
+        numbers === '22222222222' ||
+        numbers === '33333333333' ||
+        numbers === '44444444444' ||
+        numbers === '55555555555' ||
+        numbers === '66666666666' ||
+        numbers === '77777777777' ||
+        numbers === '88888888888' ||
+        numbers === '99999999999') {
+      return false
+    }
     
     let sum = 0
     for (let i = 0; i < 9; i++) {
@@ -92,6 +135,15 @@ function SignUpForm() {
       value = formatCPF(value)
     } else if (field === 'phone') {
       value = formatPhone(value)
+    } else if (field === 'birthDate') {
+      value = formatDate(value)
+    } else if (field === 'fullName') {
+      // Normalizar nome completo: remover espaços duplicados (mas manter espaços simples)
+      // Não remover espaços durante digitação, apenas normalizar ao final
+      // Permitir que o usuário digite normalmente
+    } else if (field === 'email') {
+      // Remover espaços do email
+      value = value.replace(/\s/g, '')
     }
     
     const newFormData = { ...formData, [field]: value }
@@ -123,11 +175,11 @@ function SignUpForm() {
     const errors: Record<string, string> = {}
     
     switch (field) {
-      case 'fullName':
-        if (!value.trim()) {
-          errors.fullName = 'O campo de nome é obrigatório.'
-        }
+      case 'fullName': {
+        const error = validateFullName(value)
+        if (error) errors.fullName = error
         break
+      }
       case 'cpf':
         if (!value.trim()) {
           errors.cpf = 'O campo de CPF é obrigatório.'
@@ -145,28 +197,26 @@ function SignUpForm() {
           errors.email = 'E-mail inválido. Verifique o formato do e-mail.'
         }
         break
-      case 'phone':
-        if (!value.trim()) {
-          errors.phone = 'O campo de telefone é obrigatório.'
-        }
+      case 'phone': {
+        const error = validatePhone(value)
+        if (error) errors.phone = error
         break
-      case 'birthDate':
-        if (!value.trim()) {
-          errors.birthDate = 'O campo de data de nascimento é obrigatório.'
-        }
+      }
+      case 'birthDate': {
+        const error = validateBirthDate(value)
+        if (error) errors.birthDate = error
         break
-      case 'password':
-        if (!value.trim()) {
-          errors.password = 'O campo de senha é obrigatório.'
-        } else if (value.length < 6) {
-          errors.password = 'A senha deve ter pelo menos 6 caracteres.'
-        }
+      }
+      case 'password': {
+        const error = validatePassword(value, currentFormData)
+        if (error) errors.password = error
         break
+      }
       case 'confirmPassword':
         if (!value.trim()) {
           errors.confirmPassword = 'Confirme sua senha.'
         } else if (value !== currentFormData.password) {
-          errors.confirmPassword = 'As senhas não coincidem.'
+          errors.confirmPassword = 'A confirmação de senha não confere com a senha informada.'
         }
         break
     }
@@ -178,6 +228,159 @@ function SignUpForm() {
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return emailRegex.test(email.trim())
+  }
+
+  const validateFullName = (name: string): string | null => {
+    const trimmed = name.trim()
+    
+    if (!trimmed) {
+      return 'O campo de nome é obrigatório.'
+    }
+    
+    // Mínimo 3 caracteres desconsiderando espaços nas extremidades
+    if (trimmed.length < 3) {
+      return 'O nome deve conter no mínimo 3 caracteres.'
+    }
+    
+    // Deve conter pelo menos um espaço entre nome e sobrenome
+    if (!trimmed.includes(' ')) {
+      return 'Informe seu nome completo (nome e sobrenome).'
+    }
+    
+    // Não deve permitir apenas números ou caracteres especiais
+    const hasLetter = /[a-zA-ZÀ-ÿ]/.test(trimmed)
+    if (!hasLetter) {
+      return 'O nome deve conter pelo menos uma letra.'
+    }
+    
+    // Verificar se não é apenas números
+    const onlyNumbers = /^\d+$/.test(trimmed.replace(/\s/g, ''))
+    if (onlyNumbers) {
+      return 'O nome não pode conter apenas números.'
+    }
+    
+    return null
+  }
+
+  const validatePhone = (phone: string): string | null => {
+    const numbers = phone.replace(/\D/g, '')
+    
+    if (!phone.trim()) {
+      return 'O campo de telefone é obrigatório.'
+    }
+    
+    // DDD com 2 dígitos + número com 9 dígitos (celular) = 11 dígitos
+    // Ou DDD com 2 dígitos + número com 8 dígitos (fixo) = 10 dígitos
+    if (numbers.length !== 10 && numbers.length !== 11) {
+      return 'Informe um telefone válido no formato (00) 00000-0000.'
+    }
+    
+    // DDD deve ter 2 dígitos
+    const ddd = numbers.substring(0, 2)
+    if (ddd.length !== 2 || !/^[1-9][0-9]$/.test(ddd)) {
+      return 'Informe um telefone válido no formato (00) 00000-0000.'
+    }
+    
+    return null
+  }
+
+  const validateBirthDate = (date: string): string | null => {
+    if (!date.trim()) {
+      return 'O campo de data de nascimento é obrigatório.'
+    }
+    
+    // Validar formato dd/MM/yyyy
+    const dateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
+    const match = date.match(dateRegex)
+    
+    if (!match) {
+      return 'Informe uma data válida no formato dd/mm/aaaa.'
+    }
+    
+    const day = parseInt(match[1], 10)
+    const month = parseInt(match[2], 10)
+    const year = parseInt(match[3], 10)
+    
+    // Validar mês
+    if (month < 1 || month > 12) {
+      return 'Informe uma data válida no formato dd/mm/aaaa.'
+    }
+    
+    // Validar dia
+    const daysInMonth = new Date(year, month, 0).getDate()
+    if (day < 1 || day > daysInMonth) {
+      return 'Informe uma data válida no formato dd/mm/aaaa.'
+    }
+    
+    // Converter para Date object
+    const birthDate = new Date(year, month - 1, day)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    birthDate.setHours(0, 0, 0, 0)
+    
+    // Verificar se é uma data válida
+    if (isNaN(birthDate.getTime())) {
+      return 'Informe uma data válida no formato dd/mm/aaaa.'
+    }
+    
+    // Não pode ser data futura
+    if (birthDate > today) {
+      return 'A data de nascimento não pode ser futura.'
+    }
+    
+    // Não pode ser muito antiga (mais de 120 anos)
+    const maxAge = new Date()
+    maxAge.setFullYear(maxAge.getFullYear() - 120)
+    if (birthDate < maxAge) {
+      return 'A data de nascimento informada é inválida.'
+    }
+    
+    // Idade mínima: 16 anos
+    const minAge = new Date()
+    minAge.setFullYear(minAge.getFullYear() - 16)
+    if (birthDate > minAge) {
+      return 'Para menores de 16 anos, o cadastro deve ser realizado pelo responsável.'
+    }
+    
+    return null
+  }
+
+  const validatePassword = (password: string, formData: typeof formData): string | null => {
+    if (!password.trim()) {
+      return 'O campo de senha é obrigatório.'
+    }
+    
+    // Mínimo 6 caracteres
+    if (password.length < 6) {
+      return 'A senha deve ter pelo menos 6 caracteres.'
+    }
+    
+    // Deve conter pelo menos uma letra e um número
+    const hasLetter = /[a-zA-ZÀ-ÿ]/.test(password)
+    const hasNumber = /\d/.test(password)
+    
+    if (!hasLetter || !hasNumber) {
+      return 'A senha deve ter pelo menos 6 caracteres e combinar letras e números.'
+    }
+    
+    // Não pode ser igual ao CPF
+    const normalizedCPF = normalizeCPF(formData.cpf)
+    if (password === normalizedCPF || password === formData.cpf) {
+      return 'A senha não pode ser igual ao CPF.'
+    }
+    
+    // Não pode ser igual ao e-mail
+    if (password.toLowerCase() === formData.email.toLowerCase().trim()) {
+      return 'A senha não pode ser igual ao e-mail.'
+    }
+    
+    // Não pode ser igual ao nome completo (normalizado)
+    const normalizedName = formData.fullName.trim().toLowerCase().replace(/\s+/g, '')
+    if (password.toLowerCase() === normalizedName) {
+      return 'A senha não pode ser igual ao nome completo.'
+    }
+    
+    return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -232,34 +435,34 @@ function SignUpForm() {
       // Revalidar todos os campos para garantir que os erros estejam visíveis
       const finalErrors: Record<string, string> = {}
       
-      if (!formData.fullName.trim()) {
-        finalErrors.fullName = 'O campo de nome é obrigatório.'
-      }
+      const fullNameError = validateFullName(formData.fullName)
+      if (fullNameError) finalErrors.fullName = fullNameError
+      
       if (!formData.cpf.trim()) {
         finalErrors.cpf = 'O campo de CPF é obrigatório.'
       } else if (!validateCPF(normalizeCPF(formData.cpf))) {
         finalErrors.cpf = 'CPF inválido.'
       }
+      
       if (!formData.email.trim()) {
         finalErrors.email = 'O campo de e-mail é obrigatório.'
       } else if (!validateEmail(formData.email)) {
         finalErrors.email = 'E-mail inválido. Verifique o formato do e-mail.'
       }
-      if (!formData.phone.trim()) {
-        finalErrors.phone = 'O campo de telefone é obrigatório.'
-      }
-      if (!formData.birthDate.trim()) {
-        finalErrors.birthDate = 'O campo de data de nascimento é obrigatório.'
-      }
-      if (!formData.password.trim()) {
-        finalErrors.password = 'O campo de senha é obrigatório.'
-      } else if (formData.password.length < 6) {
-        finalErrors.password = 'A senha deve ter pelo menos 6 caracteres.'
-      }
+      
+      const phoneError = validatePhone(formData.phone)
+      if (phoneError) finalErrors.phone = phoneError
+      
+      const birthDateError = validateBirthDate(formData.birthDate)
+      if (birthDateError) finalErrors.birthDate = birthDateError
+      
+      const passwordError = validatePassword(formData.password, formData)
+      if (passwordError) finalErrors.password = passwordError
+      
       if (!formData.confirmPassword.trim()) {
         finalErrors.confirmPassword = 'Confirme sua senha.'
       } else if (formData.password !== formData.confirmPassword) {
-        finalErrors.confirmPassword = 'As senhas não coincidem.'
+        finalErrors.confirmPassword = 'A confirmação de senha não confere com a senha informada.'
       }
 
       setFieldErrors(finalErrors)
@@ -272,16 +475,22 @@ function SignUpForm() {
       // Limpar e normalizar email
       const cleanEmail = formData.email.trim().toLowerCase()
       
+      // Normalizar CPF (remover formatação)
+      const normalizedCPF = normalizeCPF(formData.cpf)
+      
+      // Normalizar nome completo (remover espaços duplicados)
+      const normalizedFullName = formData.fullName.trim().replace(/\s+/g, ' ')
+      
       // Criar usuário no Supabase Auth primeiro
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanEmail,
         password: formData.password,
         options: {
-          data: {
-            full_name: formData.fullName,
+            data: {
+            full_name: normalizedFullName,
             cpf: normalizedCPF,
             phone: formData.phone.replace(/\D/g, ''),
-            birth_date: formData.birthDate
+            birth_date: convertDateToISO(formData.birthDate)
           }
         }
       })
@@ -289,7 +498,7 @@ function SignUpForm() {
       if (authError) {
         // Verificar se é erro de email já cadastrado
         if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-          throw new Error('Este e-mail já está cadastrado. Faça login ou recupere sua senha.')
+          throw new Error('Já existe uma conta cadastrada com este e-mail.')
         }
         // Verificar se é erro de rate limit - passar o erro completo para translateError tratar
         // O translateError vai extrair o código e a mensagem corretamente
@@ -313,12 +522,15 @@ function SignUpForm() {
       }
 
       // Criar/atualizar perfil usando rota interna com chave service_role
+      // Converter data de dd/MM/yyyy para yyyy-MM-dd para o backend
+      const birthDateISO = convertDateToISO(formData.birthDate)
+      
       const profilePayload = {
         userId: authData.user.id,
-        fullName: formData.fullName,
+        fullName: normalizedFullName,
         cpf: normalizedCPF,
         phone: formData.phone.replace(/\D/g, ''),
-        birthDate: formData.birthDate
+        birthDate: birthDateISO
       }
 
       const profileResponse = await fetch('/api/profiles', {
@@ -329,15 +541,39 @@ function SignUpForm() {
         body: JSON.stringify(profilePayload)
       })
 
-      let profileResult: { success?: boolean; error?: string } | null = null
+      let profileResult: { success?: boolean; error?: string; code?: string; details?: string } | null = null
       try {
         profileResult = await profileResponse.json()
-      } catch {
-        // Ignorar erro de parse e tratar abaixo como falha genérica
+      } catch (parseError) {
+        console.error('Erro ao fazer parse da resposta do perfil:', parseError)
+        // Se não conseguir fazer parse, tentar ler o texto da resposta
+        const textResponse = await profileResponse.text()
+        console.error('Resposta da API (texto):', textResponse)
+        throw new Error('Erro ao processar resposta do servidor. Tente novamente.')
       }
 
       if (!profileResponse.ok || !profileResult?.success) {
-        const message = profileResult?.error || 'Conta criada, mas houve um problema ao salvar seus dados. Entre em contato com o suporte.'
+        const errorCode = profileResult?.code
+        let message = profileResult?.error || 'Conta criada, mas houve um problema ao salvar seus dados. Entre em contato com o suporte.'
+        
+        // Mensagens específicas por código de erro
+        if (errorCode === 'CPF_DUPLICATED' || profileResponse.status === 409) {
+          message = 'Já existe uma conta cadastrada para este CPF.'
+        } else if (errorCode === 'CPF_CHECK_ERROR') {
+          message = 'Erro ao validar CPF. Verifique se o CPF está correto e tente novamente.'
+        } else if (profileResponse.status === 400) {
+          message = profileResult?.error || 'Dados inválidos. Verifique os campos preenchidos.'
+        } else if (profileResponse.status === 500) {
+          message = profileResult?.error || 'Erro no servidor. Tente novamente em alguns instantes.'
+        }
+        
+        console.error('Erro ao criar perfil:', {
+          status: profileResponse.status,
+          statusText: profileResponse.statusText,
+          result: profileResult,
+          payload: profilePayload
+        })
+        
         throw new Error(message)
       }
 
@@ -366,6 +602,13 @@ function SignUpForm() {
       // Garantir que o erro seja tratado corretamente
       const translatedError = translateError(error)
       setError(translatedError)
+      
+      // Limpar senhas após erro (por segurança)
+      setFormData(prev => ({
+        ...prev,
+        password: '',
+        confirmPassword: ''
+      }))
     } finally {
       setLoading(false)
       // Aguardar um pouco antes de permitir nova submissão para evitar rate limit
@@ -456,11 +699,12 @@ function SignUpForm() {
               <Label htmlFor="birthDate">Data de Nascimento *</Label>
               <Input
                 id="birthDate"
-                type="date"
+                type="text"
+                placeholder="dd/mm/aaaa"
                 value={formData.birthDate}
                 onChange={(e) => handleChange('birthDate', e.target.value)}
                 onBlur={() => handleBlur('birthDate')}
-                max={new Date().toISOString().split('T')[0]}
+                maxLength={10}
                 className={fieldErrors.birthDate ? 'border-destructive' : ''}
               />
               {fieldErrors.birthDate && (
@@ -470,15 +714,29 @@ function SignUpForm() {
 
             <div className="space-y-2">
               <Label htmlFor="password">Senha *</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Mínimo 6 caracteres"
-                value={formData.password}
-                onChange={(e) => handleChange('password', e.target.value)}
-                onBlur={() => handleBlur('password')}
-                className={fieldErrors.password ? 'border-destructive' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Mínimo 6 caracteres"
+                  value={formData.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  onBlur={() => handleBlur('password')}
+                  className={fieldErrors.password ? 'border-destructive pr-10' : 'pr-10'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               {fieldErrors.password && (
                 <p className="text-sm text-destructive">{fieldErrors.password}</p>
               )}
@@ -486,15 +744,29 @@ function SignUpForm() {
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirmar Senha *</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Digite a senha novamente"
-                value={formData.confirmPassword}
-                onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                onBlur={() => handleBlur('confirmPassword')}
-                className={fieldErrors.confirmPassword ? 'border-destructive' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Digite a senha novamente"
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  onBlur={() => handleBlur('confirmPassword')}
+                  className={fieldErrors.confirmPassword ? 'border-destructive pr-10' : 'pr-10'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               {fieldErrors.confirmPassword && (
                 <p className="text-sm text-destructive">{fieldErrors.confirmPassword}</p>
               )}
