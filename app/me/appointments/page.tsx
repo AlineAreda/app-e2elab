@@ -11,6 +11,7 @@ import { translateError } from '@/lib/error-messages'
 import { toast } from 'sonner'
 import { MapPin, Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface Appointment {
   id: string
@@ -26,11 +27,27 @@ interface Appointment {
   unit_address?: string
 }
 
+/**
+ * Parse ISO date string (YYYY-MM-DD) to Date object in local timezone
+ * DECISÃO: new Date('YYYY-MM-DD') é interpretado como UTC, causando bugs de timezone
+ * Esta função cria a data usando os componentes individuais no timezone local
+ */
+function parseISODateLocal(isoDateString: string): Date {
+  const parts = isoDateString.split('-').map(Number)
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format: ${isoDateString}. Expected YYYY-MM-DD`)
+  }
+  // new Date(year, monthIndex, day) usa timezone local
+  // monthIndex é 0-based, então subtraímos 1 do mês
+  return new Date(parts[0], parts[1] - 1, parts[2])
+}
+
 export default function AppointmentsPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [appointmentsLoading, setAppointmentsLoading] = useState(true)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (loading) return
@@ -47,6 +64,11 @@ export default function AppointmentsPage() {
 
   const fetchAppointments = async (userId: string) => {
     try {
+      // DECISÃO: Usar formato explícito de FK para joins mais robustos
+      // TODO: Verificar os nomes exatos das foreign keys no schema e substituir:
+      // - appointments_exam_id_fkey pelo nome real da constraint de exam_id
+      // - appointments_unit_id_fkey pelo nome real da constraint de unit_id
+      // Formato: tabela!nome_da_constraint_fk(campos)
       const { data, error } = await supabase
         .from('appointments')
         .select(`
@@ -56,11 +78,11 @@ export default function AppointmentsPage() {
           status,
           exam_id,
           unit_id,
-          exams (
+          exams!appointments_exam_id_fkey (
             name,
             price
           ),
-          units (
+          units!appointments_unit_id_fkey (
             name,
             city,
             address
@@ -94,6 +116,11 @@ export default function AppointmentsPage() {
   }
 
   const handleCancel = async (appointmentId: string) => {
+    // DECISÃO: Proteção contra duplo clique - verificar se já está cancelando
+    if (cancellingId !== null) {
+      return
+    }
+
     const currentUser = user
     if (!currentUser) return
 
@@ -103,6 +130,9 @@ export default function AppointmentsPage() {
     if (!window.confirm(`Tem certeza que deseja cancelar o agendamento de ${appointment.exam_name}?`)) {
       return
     }
+
+    // Marcar como cancelando para desabilitar botão
+    setCancellingId(appointmentId)
 
     try {
       const { error } = await supabase
@@ -129,6 +159,9 @@ export default function AppointmentsPage() {
         description: translateError(error),
         duration: 5000,
       })
+    } finally {
+      // Sempre resetar estado de cancelamento, mesmo em caso de erro
+      setCancellingId(null)
     }
   }
 
@@ -177,7 +210,7 @@ export default function AppointmentsPage() {
             </p>
             <div className="text-center">
               <Button asChild>
-                <a href="/exams">Ver Exames Disponíveis</a>
+                <Link href="/exams">Ver Exames Disponíveis</Link>
               </Button>
             </div>
           </CardContent>
@@ -192,7 +225,7 @@ export default function AppointmentsPage() {
                     <CardTitle>{appointment.exam_name}</CardTitle>
                     <CardDescription>
                       {format(
-                        new Date(appointment.scheduled_date),
+                        parseISODateLocal(appointment.scheduled_date),
                         "EEEE, dd 'de' MMMM 'de' yyyy",
                         { locale: ptBR }
                       )}
@@ -236,8 +269,9 @@ export default function AppointmentsPage() {
                       <Button
                         variant="outline"
                         onClick={() => handleCancel(appointment.id)}
+                        disabled={cancellingId === appointment.id}
                       >
-                        Cancelar
+                        {cancellingId === appointment.id ? 'Cancelando...' : 'Cancelar'}
                       </Button>
                     </div>
                   )}

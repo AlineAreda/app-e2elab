@@ -26,16 +26,18 @@ export function translateError(error: any): string {
   }
   
   // Verificar código de erro do Supabase primeiro
-  if (errorCode === 'over_email_send_rate_limit' || errorCode === 429 || 
-      String(errorCode).includes('over_email_send_rate_limit')) {
-    // Tentar extrair o tempo de espera da mensagem
-    const timeMatch = errorMessage.match(/(\d+)\s*(second|seconds|segundo|segundos)/i)
-    if (timeMatch) {
-      const time = timeMatch[1]
-      return `Por segurança, você só pode solicitar o cadastro novamente após ${time} segundos. Aguarde e tente novamente.`
-    }
-    return 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.'
+  if (errorCode === 'email_not_confirmed' || errorMessage.includes('email_not_confirmed') ||
+      errorMessage.toLowerCase().includes('email not confirmed') ||
+      errorMessage.toLowerCase().includes('email não confirmado')) {
+    return 'Por favor, confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.'
   }
+
+  // Removido: Não exibir mensagens de rate limit do Supabase que bloqueiam o usuário
+  // Se o Supabase retornar rate limit, o usuário pode tentar novamente imediatamente
+  // if (errorCode === 'over_email_send_rate_limit' || errorCode === 429 || 
+  //     String(errorCode).includes('over_email_send_rate_limit')) {
+  //   return 'Erro ao processar cadastro. Tente novamente.'
+  // }
 
   // Mensagens de erro do Supabase Auth
   const errorTranslations: Record<string, string> = {
@@ -44,9 +46,10 @@ export function translateError(error: any): string {
     'Email not confirmed': 'E-mail não confirmado. Verifique sua caixa de entrada.',
     'User already registered': 'Este e-mail já está cadastrado. Faça login ou recupere sua senha.',
     'already registered': 'Este e-mail já está cadastrado. Faça login ou recupere sua senha.',
-    'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
-    'over_email_send_rate_limit': 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.',
-    'For security purposes, you can only request this after': 'Por segurança, você só pode solicitar isso após',
+    // Removido: Mensagens de rate limit que bloqueiam o usuário
+    // 'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+    // 'over_email_send_rate_limit': 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.',
+    // 'For security purposes, you can only request this after': 'Por segurança, você só pode solicitar isso após',
     'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
     'Signup is disabled': 'Cadastro temporariamente desabilitado. Entre em contato com o suporte.',
     'User not found': 'Usuário não encontrado. Verifique suas credenciais.',
@@ -73,21 +76,14 @@ export function translateError(error: any): string {
     }
   }
 
-  // Verificar erro de rate limit de e-mail na mensagem e extrair tempo de espera
-  if (errorMessage.includes('over_email_send_rate_limit') || 
-      errorMessage.includes('For security purposes, you can only request this after') ||
-      errorMessage.toLowerCase().includes('rate limit') ||
-      errorMessage.toLowerCase().includes('too many requests')) {
-    // Tentar extrair o tempo de espera da mensagem (pode estar em diferentes formatos)
-    const timeMatch = errorMessage.match(/(\d+)\s*(second|seconds|segundo|segundos|s)/i) ||
-                     errorMessage.match(/after\s+(\d+)/i) ||
-                     errorMessage.match(/(\d+)\s*segundos?/i)
-    if (timeMatch) {
-      const time = timeMatch[1]
-      return `Por segurança, você só pode solicitar o cadastro novamente após ${time} segundos. Aguarde e tente novamente.`
-    }
-    return 'Limite de envio de e-mail excedido. Aguarde alguns segundos antes de tentar novamente.'
-  }
+  // Removido: Não exibir mensagens de rate limit que bloqueiam o usuário
+  // Se houver rate limit, o usuário pode tentar novamente imediatamente
+  // if (errorMessage.includes('over_email_send_rate_limit') || 
+  //     errorMessage.includes('For security purposes, you can only request this after') ||
+  //     errorMessage.toLowerCase().includes('rate limit') ||
+  //     errorMessage.toLowerCase().includes('too many requests')) {
+  //   return 'Erro ao processar cadastro. Tente novamente.'
+  // }
 
   // Traduções parciais (contém)
   if (errorMessage.toLowerCase().includes('invalid login')) {
@@ -101,9 +97,10 @@ export function translateError(error: any): string {
     if (errorMessage.toLowerCase().includes('invalid')) {
       return 'E-mail inválido. Verifique o formato do e-mail.'
     }
-    if (errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('rate_limit')) {
-      return 'Muitas tentativas de cadastro. Aguarde alguns segundos e tente novamente.'
-    }
+    // Removido: Não bloquear usuário com mensagens de rate limit
+    // if (errorMessage.toLowerCase().includes('rate limit') || errorMessage.toLowerCase().includes('rate_limit')) {
+    //   return 'Muitas tentativas de cadastro. Aguarde alguns segundos e tente novamente.'
+    // }
   }
 
   if (errorMessage.toLowerCase().includes('password')) {

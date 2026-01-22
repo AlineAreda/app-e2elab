@@ -116,3 +116,15 @@ SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role_aqui
 - Verifique se está usando a chave correta (anon para cliente, service_role para API)
 - Verifique as políticas RLS no Supabase
 
+## 📧 Cadastro sem confirmação de e-mail (apenas salvar no banco)
+
+**Para cadastrar usuários e salvar no banco sem enviar e-mail de confirmação**, desabilite a confirmação no Supabase:
+
+1. Acesse o Dashboard do Supabase
+2. Vá em **Settings** (⚙️) > **Authentication**
+3. Role até a seção **Email Auth**
+4. Localize **Enable email confirmations** ou **Confirm email**
+5. **Desabilite** a opção (toggle OFF)
+6. Clique em **Save**
+
+Com isso desabilitado, o cadastro **apenas cria o usuário e o perfil no banco**; nenhum e-mail é enviado. O usuário pode fazer login imediatamente após o cadastro.

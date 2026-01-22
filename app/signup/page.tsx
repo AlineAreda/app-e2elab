@@ -48,6 +48,15 @@ function SignUpForm() {
     return cpf.replace(/\D/g, '')
   }
 
+  /** Normaliza e-mail: remove espaços, caracteres invisíveis (ex.: copy-paste) e deixa em minúsculas. */
+  const normalizeEmail = (email: string) => {
+    return email
+      .replace(/\s/g, '')
+      .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+      .trim()
+      .toLowerCase()
+  }
+
   const formatCPF = (cpf: string) => {
     const numbers = normalizeCPF(cpf)
     if (numbers.length <= 11) {
@@ -142,8 +151,8 @@ function SignUpForm() {
       // Não remover espaços durante digitação, apenas normalizar ao final
       // Permitir que o usuário digite normalmente
     } else if (field === 'email') {
-      // Remover espaços do email
-      value = value.replace(/\s/g, '')
+      // Remover espaços e caracteres invisíveis (ex.: copy-paste)
+      value = value.replace(/\s/g, '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
     }
     
     const newFormData = { ...formData, [field]: value }
@@ -190,13 +199,15 @@ function SignUpForm() {
           }
         }
         break
-      case 'email':
-        if (!value.trim()) {
+      case 'email': {
+        const normalized = normalizeEmail(value)
+        if (!normalized) {
           errors.email = 'O campo de e-mail é obrigatório.'
-        } else if (!validateEmail(value)) {
+        } else if (!validateEmail(normalized)) {
           errors.email = 'E-mail inválido. Verifique o formato do e-mail.'
         }
         break
+      }
       case 'phone': {
         const error = validatePhone(value)
         if (error) errors.phone = error
@@ -227,7 +238,7 @@ function SignUpForm() {
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email.trim())
+    return emailRegex.test(email.trim().toLowerCase())
   }
 
   const validateFullName = (name: string): string | null => {
@@ -345,7 +356,15 @@ function SignUpForm() {
     return null
   }
 
-  const validatePassword = (password: string, formData: typeof formData): string | null => {
+  const validatePassword = (password: string, formData: {
+    fullName: string
+    cpf: string
+    email: string
+    phone: string
+    birthDate: string
+    password: string
+    confirmPassword: string
+  }): string | null => {
     if (!password.trim()) {
       return 'O campo de senha é obrigatório.'
     }
@@ -383,6 +402,66 @@ function SignUpForm() {
     return null
   }
 
+  /**
+   * Valida todos os campos do formulário e retorna objeto de erros
+   * DECISÃO: Não depende de state assíncrono - validação síncrona local
+   * Retorna Record<field, errorMessage> - vazio se sem erros
+   */
+  const validateAll = (currentFormData: {
+    fullName: string
+    cpf: string
+    email: string
+    phone: string
+    birthDate: string
+    password: string
+    confirmPassword: string
+  }): Record<string, string> => {
+    const errors: Record<string, string> = {}
+
+    // Validar nome completo
+    const fullNameError = validateFullName(currentFormData.fullName)
+    if (fullNameError) errors.fullName = fullNameError
+
+    // Validar CPF
+    if (!currentFormData.cpf.trim()) {
+      errors.cpf = 'O campo de CPF é obrigatório.'
+    } else {
+      const normalizedCPF = normalizeCPF(currentFormData.cpf)
+      if (!validateCPF(normalizedCPF)) {
+        errors.cpf = 'CPF inválido.'
+      }
+    }
+
+    // Validar email (usa normalização para evitar falsos "inválido" por espaços/caracteres invisíveis)
+    const normalizedEmail = normalizeEmail(currentFormData.email)
+    if (!normalizedEmail) {
+      errors.email = 'O campo de e-mail é obrigatório.'
+    } else if (!validateEmail(normalizedEmail)) {
+      errors.email = 'E-mail inválido. Verifique o formato do e-mail.'
+    }
+
+    // Validar telefone
+    const phoneError = validatePhone(currentFormData.phone)
+    if (phoneError) errors.phone = phoneError
+
+    // Validar data de nascimento
+    const birthDateError = validateBirthDate(currentFormData.birthDate)
+    if (birthDateError) errors.birthDate = birthDateError
+
+    // Validar senha
+    const passwordError = validatePassword(currentFormData.password, currentFormData)
+    if (passwordError) errors.password = passwordError
+
+    // Validar confirmação de senha
+    if (!currentFormData.confirmPassword.trim()) {
+      errors.confirmPassword = 'Confirme sua senha.'
+    } else if (currentFormData.password !== currentFormData.confirmPassword) {
+      errors.confirmPassword = 'A confirmação de senha não confere com a senha informada.'
+    }
+
+    return errors
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -405,75 +484,21 @@ function SignUpForm() {
       return newTouched
     })
 
-    // Validar todos os campos
-    const fieldsToValidate = ['fullName', 'cpf', 'email', 'phone', 'birthDate', 'password', 'confirmPassword']
-    const errors: Record<string, string> = {}
+    // DECISÃO: Validar todos os campos usando função local validateAll
+    // Não depende de state assíncrono - validação síncrona retorna objeto de erros diretamente
+    const validationErrors = validateAll(formData)
 
-    fieldsToValidate.forEach(field => {
-      const value = formData[field as keyof typeof formData]
-      validateField(field, value, formData)
-    })
-
-    // Aguardar um pouco para que os erros sejam atualizados
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    // Verificar se há erros após validação
-    const hasErrors = Object.keys(fieldErrors).length > 0 || 
-                     !formData.fullName.trim() ||
-                     !formData.cpf.trim() ||
-                     !formData.email.trim() ||
-                     !formData.phone.trim() ||
-                     !formData.birthDate.trim() ||
-                     !formData.password.trim() ||
-                     !formData.confirmPassword.trim() ||
-                     formData.password !== formData.confirmPassword ||
-                     formData.password.length < 6 ||
-                     !validateEmail(formData.email) ||
-                     !validateCPF(normalizeCPF(formData.cpf))
-
-    if (hasErrors) {
-      // Revalidar todos os campos para garantir que os erros estejam visíveis
-      const finalErrors: Record<string, string> = {}
-      
-      const fullNameError = validateFullName(formData.fullName)
-      if (fullNameError) finalErrors.fullName = fullNameError
-      
-      if (!formData.cpf.trim()) {
-        finalErrors.cpf = 'O campo de CPF é obrigatório.'
-      } else if (!validateCPF(normalizeCPF(formData.cpf))) {
-        finalErrors.cpf = 'CPF inválido.'
-      }
-      
-      if (!formData.email.trim()) {
-        finalErrors.email = 'O campo de e-mail é obrigatório.'
-      } else if (!validateEmail(formData.email)) {
-        finalErrors.email = 'E-mail inválido. Verifique o formato do e-mail.'
-      }
-      
-      const phoneError = validatePhone(formData.phone)
-      if (phoneError) finalErrors.phone = phoneError
-      
-      const birthDateError = validateBirthDate(formData.birthDate)
-      if (birthDateError) finalErrors.birthDate = birthDateError
-      
-      const passwordError = validatePassword(formData.password, formData)
-      if (passwordError) finalErrors.password = passwordError
-      
-      if (!formData.confirmPassword.trim()) {
-        finalErrors.confirmPassword = 'Confirme sua senha.'
-      } else if (formData.password !== formData.confirmPassword) {
-        finalErrors.confirmPassword = 'A confirmação de senha não confere com a senha informada.'
-      }
-
-      setFieldErrors(finalErrors)
+    // Se houver erros, atualizar state e bloquear submit
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors)
       setLoading(false)
       isSubmittingRef.current = false
       return
     }
 
     try {
-      // Limpar e normalizar email
-      const cleanEmail = formData.email.trim().toLowerCase()
+      // Limpar e normalizar email (remove espaços, caracteres invisíveis, minúsculas)
+      const cleanEmail = normalizeEmail(formData.email)
       
       // Normalizar CPF (remover formatação)
       const normalizedCPF = normalizeCPF(formData.cpf)
@@ -481,12 +506,13 @@ function SignUpForm() {
       // Normalizar nome completo (remover espaços duplicados)
       const normalizedFullName = formData.fullName.trim().replace(/\s+/g, ' ')
       
-      // Criar usuário no Supabase Auth primeiro
+      // Criar usuário no Supabase Auth (sem envio de e-mail de confirmação se
+      // "Enable email confirmations" estiver desabilitado em Supabase > Authentication)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanEmail,
         password: formData.password,
         options: {
-            data: {
+          data: {
             full_name: normalizedFullName,
             cpf: normalizedCPF,
             phone: formData.phone.replace(/\D/g, ''),
@@ -500,8 +526,6 @@ function SignUpForm() {
         if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
           throw new Error('Já existe uma conta cadastrada com este e-mail.')
         }
-        // Verificar se é erro de rate limit - passar o erro completo para translateError tratar
-        // O translateError vai extrair o código e a mensagem corretamente
         throw authError
       }
 
@@ -509,20 +533,12 @@ function SignUpForm() {
         throw new Error('Não foi possível criar a conta. Tente novamente.')
       }
 
-      // Fazer login primeiro para ter o contexto de autenticação
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: formData.password
-      })
+      // Verificar se o email precisa ser confirmado
+      // Se authData.session é null, significa que o email não foi confirmado
+      const emailNeedsConfirmation = !authData.session
 
-      if (signInError) {
-        // Se o login falhar imediatamente após signup, pode ser que precise confirmar email
-        // Mas vamos tentar continuar mesmo assim
-        console.warn('Login automático falhou após signup:', signInError)
-      }
-
-      // Criar/atualizar perfil usando rota interna com chave service_role
-      // Converter data de dd/MM/yyyy para yyyy-MM-dd para o backend
+      // Criar/atualizar perfil usando rota interna (funciona mesmo sem sessão confirmada)
+      // O profile será criado usando service_role no backend, então não precisa de sessão
       const birthDateISO = convertDateToISO(formData.birthDate)
       
       const profilePayload = {
@@ -541,30 +557,50 @@ function SignUpForm() {
         body: JSON.stringify(profilePayload)
       })
 
-      let profileResult: { success?: boolean; error?: string; code?: string; details?: string } | null = null
+      // DECISÃO: Parse robusto - usar response.text() uma vez e depois JSON.parse
+      // Evita erro "body already used" que pode ocorrer ao chamar .json() e depois .text()
+      let profileResult: { ok?: boolean; error?: string; code?: string; details?: string; missing?: string; cpf_status?: string; hint?: string } | null = null
+      const responseText = await profileResponse.text()
+      
       try {
-        profileResult = await profileResponse.json()
+        profileResult = JSON.parse(responseText)
       } catch (parseError) {
         console.error('Erro ao fazer parse da resposta do perfil:', parseError)
-        // Se não conseguir fazer parse, tentar ler o texto da resposta
-        const textResponse = await profileResponse.text()
-        console.error('Resposta da API (texto):', textResponse)
+        console.error('Resposta da API (texto):', responseText)
         throw new Error('Erro ao processar resposta do servidor. Tente novamente.')
       }
 
-      if (!profileResponse.ok || !profileResult?.success) {
-        const errorCode = profileResult?.code
+      // Tratar erros específicos do backend
+      if (!profileResponse.ok || (profileResult && !profileResult.ok)) {
+        if (!profileResult) {
+          throw new Error('Resposta inválida do servidor. Tente novamente.')
+        }
+        
+        const errorCode = profileResult.code
         let message = profileResult?.error || 'Conta criada, mas houve um problema ao salvar seus dados. Entre em contato com o suporte.'
         
         // Mensagens específicas por código de erro
-        if (errorCode === 'CPF_DUPLICATED' || profileResponse.status === 409) {
+        if (errorCode === 'MISSING_ENV_VAR' || errorCode === 'INVALID_ENV_VAR') {
+          message = `Erro de configuração: faltando ou inválida a variável de ambiente ${profileResult.missing || 'SUPABASE_SERVICE_ROLE_KEY'}. Entre em contato com o suporte.`
+        } else if (errorCode === 'INVALID_API_KEY') {
+          message = 'Erro de configuração: chave de API do Supabase inválida. Verifique a configuração do servidor.'
+          if (profileResult?.hint) {
+            message += ` ${profileResult.hint}`
+          }
+        } else if (errorCode === 'CPF_INVALID') {
+          message = 'CPF inválido. Verifique se o CPF está correto e tente novamente.'
+        } else if (errorCode === 'CPF_DUPLICATED' || profileResponse.status === 409) {
           message = 'Já existe uma conta cadastrada para este CPF.'
-        } else if (errorCode === 'CPF_CHECK_ERROR') {
-          message = 'Erro ao validar CPF. Verifique se o CPF está correto e tente novamente.'
+        } else if (errorCode === 'MISSING_FIELDS' || errorCode === 'INVALID_BODY') {
+          message = profileResult?.error || 'Dados inválidos. Verifique os campos preenchidos.'
         } else if (profileResponse.status === 400) {
           message = profileResult?.error || 'Dados inválidos. Verifique os campos preenchidos.'
         } else if (profileResponse.status === 500) {
+          // Erros 500 são críticos e devem impedir o cadastro
           message = profileResult?.error || 'Erro no servidor. Tente novamente em alguns instantes.'
+          if (profileResult?.hint) {
+            message += ` ${profileResult.hint}`
+          }
         }
         
         console.error('Erro ao criar perfil:', {
@@ -574,28 +610,35 @@ function SignUpForm() {
           payload: profilePayload
         })
         
-        throw new Error(message)
-      }
-
-      // Se ainda não fizemos login (caso tenha falhado antes), tentar novamente
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
-      if (!currentSession) {
-        const { error: signInErrorRetry } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: formData.password
-        })
-
-        if (signInErrorRetry) {
-          // Se o login falhar, mas a conta foi criada, redirecionar para login
-          throw new Error('Conta criada com sucesso! Faça login para continuar.')
+        // Se for erro crítico (500, CPF inválido, CPF duplicado, API key inválida), lançar erro
+        // Erros de verificação externa não devem bloquear (mas não há mais CPF_CHECK_ERROR)
+        if (profileResponse.status >= 500 || 
+            errorCode === 'CPF_INVALID' || 
+            errorCode === 'CPF_DUPLICATED' || 
+            errorCode === 'MISSING_ENV_VAR' || 
+            errorCode === 'INVALID_ENV_VAR' ||
+            errorCode === 'INVALID_API_KEY') {
+          throw new Error(message)
         }
+        
+        // Para outros erros, continuar o fluxo (perfil pode ter sido criado mesmo assim)
+        console.warn('Erro não crítico ao criar perfil, continuando fluxo:', errorCode)
       }
 
+      // Após cadastro bem-sucedido, redirecionar para login
+      // Sempre redirecionar, mesmo se email precisar de confirmação
       const params = new URLSearchParams({
         redirectTo,
         signup: 'success',
         identifier: cleanEmail
       })
+      
+      // Adicionar parâmetro se email precisa ser confirmado
+      if (emailNeedsConfirmation) {
+        params.append('emailConfirmation', 'required')
+      }
+      
+      // Redirecionar para login (sempre, mesmo com email não confirmado)
       router.push(`/login?${params.toString()}`)
     } catch (error: any) {
       console.error('Erro completo no cadastro:', error)
@@ -611,10 +654,8 @@ function SignUpForm() {
       }))
     } finally {
       setLoading(false)
-      // Aguardar um pouco antes de permitir nova submissão para evitar rate limit
-      setTimeout(() => {
-        isSubmittingRef.current = false
-      }, 1000)
+      // Resetar imediatamente para permitir nova tentativa sem espera
+      isSubmittingRef.current = false
     }
   }
 
