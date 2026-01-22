@@ -331,48 +331,50 @@ export async function POST(request: NextRequest) {
   // Tentamos primeiro com 'id', se falhar por coluna inexistente, tentamos 'user_id'
   let profileData: any = null
   let upsertError: any = null
+  let includeCpfStatus = true
+
+  const hasMissingColumn = (error: any, column: string) => {
+    const message = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`
+    return message.includes(column) && message.toLowerCase().includes('column')
+  }
+
+  const upsertProfile = async (primaryKey: 'id' | 'user_id', withCpfStatus: boolean) => {
+    const basePayload = {
+      [primaryKey]: userId,
+      full_name: fullName,
+      cpf: normalizedCpf,
+      phone: normalizedPhone,
+      birth_date: birthDate
+    }
+    const payload = withCpfStatus ? { ...basePayload, cpf_status: cpfStatus } : basePayload
+    const selectFields = withCpfStatus ? `${primaryKey}, cpf_status` : primaryKey
+
+    return supabaseAdmin
+      .from('profiles')
+      .upsert(payload, { onConflict: primaryKey })
+      .select(selectFields)
+      .single()
+  }
 
   // Tentar upsert com 'id' como PK (schema padrão: profiles.id = auth.users.id)
-  const { data: upsertData, error: upsertErr } = await supabaseAdmin
-    .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        full_name: fullName,
-        cpf: normalizedCpf,
-        phone: normalizedPhone,
-        birth_date: birthDate,
-        cpf_status: cpfStatus
-      },
-      { 
-        onConflict: 'id'
-      }
-    )
-    .select('id, cpf_status')
-    .single()
+  let { data: upsertData, error: upsertErr } = await upsertProfile('id', includeCpfStatus)
 
   if (upsertErr) {
+    if (hasMissingColumn(upsertErr, 'cpf_status')) {
+      includeCpfStatus = false
+      ;({ data: upsertData, error: upsertErr } = await upsertProfile('id', includeCpfStatus))
+    }
+
     // Se erro for de coluna 'id' inexistente, tentar com 'user_id'
     if (upsertErr.message?.includes('column') && 
         (upsertErr.message?.includes('id') || upsertErr.code === '42703')) {
       // Fallback: tentar com 'user_id' como PK
-      const { data: fallbackData, error: fallbackError } = await supabaseAdmin
-        .from('profiles')
-        .upsert(
-          {
-            user_id: userId,
-            full_name: fullName,
-            cpf: normalizedCpf,
-            phone: normalizedPhone,
-            birth_date: birthDate,
-            cpf_status: cpfStatus
-          },
-          { 
-            onConflict: 'user_id'
-          }
-        )
-        .select('user_id, cpf_status')
-        .single()
+      let { data: fallbackData, error: fallbackError } = await upsertProfile('user_id', includeCpfStatus)
+
+      if (fallbackError && includeCpfStatus && hasMissingColumn(fallbackError, 'cpf_status')) {
+        includeCpfStatus = false
+        ;({ data: fallbackData, error: fallbackError } = await upsertProfile('user_id', includeCpfStatus))
+      }
 
       if (fallbackError) {
         upsertError = fallbackError
