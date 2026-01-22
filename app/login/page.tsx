@@ -14,65 +14,42 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [checkingUser, setCheckingUser] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || '/exams'
+  const signupSuccess = searchParams.get('signup') === 'success'
+  const emailConfirmationRequired = searchParams.get('emailConfirmation') === 'required'
+  const prefillIdentifier = searchParams.get('identifier') || ''
 
   // Verificar se o identificador é CPF ou email
+  // DECISÃO: CPF só é considerado quando NÃO parecer email e tiver 11 dígitos numéricos
   const isCPF = (value: string) => {
-    const cpfRegex = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/
+    // Primeiro verificar se parece email (tem @ e domínio)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (emailRegex.test(value.trim())) {
+      return false
+    }
+    
+    // Se não é email, verificar se tem exatamente 11 dígitos numéricos
     const numbersOnly = value.replace(/\D/g, '')
-    return numbersOnly.length === 11 && cpfRegex.test(value) || numbersOnly.length === 11
+    if (numbersOnly.length !== 11) {
+      return false
+    }
+    
+    // Verificar se o formato está correto (pode ter formatação ou não)
+    const cpfRegex = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/
+    return cpfRegex.test(value.trim()) || numbersOnly.length === 11
   }
 
   const normalizeCPF = (cpf: string) => {
     return cpf.replace(/\D/g, '')
   }
 
-  const checkUserExists = async (identifier: string) => {
-    try {
-      // Se for CPF, buscar no perfil usando RPC
-      if (isCPF(identifier)) {
-        const normalizedCPF = normalizeCPF(identifier)
-        const { data: emailData, error } = await supabase
-          .rpc('get_user_email_by_cpf', { cpf_param: normalizedCPF })
-
-        if (error || !emailData) {
-          return null
-        }
-
-        return emailData
-      } else {
-        // Se for email, verificar se existe tentando fazer login
-        // Nota: Esta é uma verificação básica, pode não ser 100% precisa
-        return identifier
-      }
-    } catch (error) {
-      return null
+  useEffect(() => {
+    if (prefillIdentifier) {
+      setIdentifier(prefillIdentifier)
     }
-  }
-
-  const handleIdentifierBlur = async () => {
-    if (!identifier) return
-
-    setCheckingUser(true)
-    try {
-      const email = await checkUserExists(identifier)
-      if (!email) {
-        // Usuário não existe, redirecionar para cadastro
-        const params = new URLSearchParams({
-          identifier: identifier,
-          redirectTo: redirectTo
-        })
-        router.push(`/signup?${params.toString()}`)
-      }
-    } catch (error) {
-      // Ignorar erro, deixar tentar login
-    } finally {
-      setCheckingUser(false)
-    }
-  }
+  }, [prefillIdentifier])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,23 +65,40 @@ function LoginForm() {
         const { data: emailData, error: emailError } = await supabase
           .rpc('get_user_email_by_cpf', { cpf_param: normalizedCPF })
 
+        // DECISÃO: Se RPC retornar null (CPF não encontrado), redirecionar para signup
+        // Isso evita falsos negativos e permite cadastro direto
         if (emailError || !emailData) {
-          throw new Error('CPF não encontrado. Faça seu cadastro primeiro.')
+          const params = new URLSearchParams({
+            identifier: identifier,
+            redirectTo: redirectTo
+          })
+          router.push(`/signup?${params.toString()}`)
+          return
         }
 
         email = emailData
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (error) throw error
+      if (authError) {
+        // DECISÃO: Usar translateError apenas para erros reais de login
+        // Mensagens de erro de validação devem ser amigáveis
+        throw authError
+      }
 
       router.push(redirectTo)
     } catch (error: any) {
-      setError(translateError(error))
+      // DECISÃO: translateError apenas para erros de autenticação do Supabase
+      // Outros erros devem ter mensagens amigáveis já definidas
+      const errorMessage = error?.code || error?.message 
+        ? translateError(error)
+        : 'Erro ao fazer login. Tente novamente.'
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -129,13 +123,8 @@ function LoginForm() {
                 placeholder="000.000.000-00 ou seu@email.com"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                onBlur={handleIdentifierBlur}
                 required
-                disabled={checkingUser}
               />
-              {checkingUser && (
-                <p className="text-xs text-muted-foreground">Verificando...</p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
@@ -148,6 +137,17 @@ function LoginForm() {
                 required
               />
             </div>
+            {signupSuccess && emailConfirmationRequired && (
+              <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-700 border border-amber-200">
+                <p className="font-medium">Confirme seu e-mail para fazer login</p>
+                <p className="mt-1 text-xs">Enviamos um e-mail de confirmação. Verifique sua caixa de entrada e clique no link para confirmar sua conta antes de fazer login.</p>
+              </div>
+            )}
+            {signupSuccess && !emailConfirmationRequired && (
+              <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">
+                Conta criada com sucesso! Faça login para continuar.
+              </div>
+            )}
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -155,7 +155,7 @@ function LoginForm() {
             )}
             <Button
               type="submit"
-              disabled={loading || checkingUser}
+              disabled={loading}
               className="w-full"
             >
               {loading ? 'Entrando...' : 'Entrar'}
@@ -195,3 +195,4 @@ export default function LoginPage() {
     </Suspense>
   )
 }
+
