@@ -67,6 +67,8 @@ export function translateError(error: any): string {
     'Network request failed': 'Erro de conexão. Verifique sua internet e tente novamente.',
     'Failed to fetch': 'Erro ao conectar com o servidor. Tente novamente.',
     'Request timeout': 'Tempo de espera esgotado. Tente novamente.',
+    'project is currently paused': 'O projeto Supabase está pausado há mais de 90 dias e não aceita conexões. Crie um novo projeto e restaure o backup.',
+    'cannot be restored through the dashboard': 'Este projeto Supabase não pode mais ser reativado pelo dashboard. É necessário restaurar os dados em um novo projeto.',
   }
 
   // Verificar se há tradução direta
@@ -114,6 +116,12 @@ export function translateError(error: any): string {
     return 'Erro de conexão. Verifique sua internet e tente novamente.'
   }
 
+  if (errorMessage.toLowerCase().includes('project is currently paused') ||
+      errorMessage.toLowerCase().includes('cannot be restored through the dashboard') ||
+      errorMessage.toLowerCase().includes('paused for over 90 days')) {
+    return 'O projeto Supabase foi pausado por mais de 90 dias e não pode ser restaurado no dashboard. Restaure o backup em um novo projeto Supabase ou localmente.'
+  }
+
   if (errorMessage.toLowerCase().includes('timeout')) {
     return 'Tempo de espera esgotado. Tente novamente.'
   }
@@ -139,4 +147,3 @@ export function translateError(error: any): string {
   
   return 'Ocorreu um erro. Por favor, tente novamente. Se o problema persistir, entre em contato com o suporte.'
 }
-
