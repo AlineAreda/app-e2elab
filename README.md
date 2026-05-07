@@ -221,3 +221,30 @@ Para produção, você precisará:
 
 MIT
 
+
+## Usuário de testes (acesso direto)
+
+Para criar um usuário fixo de testes no seu projeto Supabase e conseguir entrar direto na aplicação, rode:
+
+```bash
+SUPABASE_URL="https://seu-projeto.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="sua_service_role_key" \
+npm run seed:test-user
+```
+
+Credenciais padrão criadas (podem ser sobrescritas por variáveis de ambiente):
+
+- `TEST_USER_EMAIL=teste.e2elab@example.com`
+- `TEST_USER_PASSWORD=Teste@123456`
+- `TEST_USER_CPF=12345678901`
+- `TEST_USER_NAME=Usuário de Testes E2ELAB`
+
+Exemplo com sobrescrita:
+
+```bash
+SUPABASE_URL="https://seu-projeto.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="sua_service_role_key" \
+TEST_USER_EMAIL="qa@empresa.com" \
+TEST_USER_PASSWORD="Senha@123456" \
+npm run seed:test-user
+```

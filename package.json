@@ -9,7 +9,8 @@
     "lint": "next lint",
     "clean": "rm -rf .next && rm -rf node_modules/.cache",
     "clean:win": "if exist .next rmdir /s /q .next && if exist node_modules\\.cache rmdir /s /q node_modules\\.cache",
-    "fresh": "npm run clean:win && npm install && npm run dev"
+    "fresh": "npm run clean:win && npm install && npm run dev",
+    "seed:test-user": "node scripts/create-test-user.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
